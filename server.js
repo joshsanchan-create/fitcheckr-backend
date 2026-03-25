@@ -13,7 +13,7 @@ const ANTHROPIC_BASE = "https://api.anthropic.com/v1";
 
 // ── Middleware ──
 app.use(cors({
-  origin: true,  // Reflects the request origin — allows any origin
+  origin: true,
   methods: ["GET", "POST", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization"],
 }));
