@@ -109,6 +109,7 @@ app.post("/api/tryon", async (req, res) => {
   let fashnGarmentImage = resolvedGarmentImage;
   if (resolvedGarmentImage && !resolvedGarmentImage.startsWith("data:")) {
     try {
+      console.log("[tryon] category:", category, "| garment URL:", resolvedGarmentImage);
       console.log("[garment] Fetching via server:", resolvedGarmentImage);
       const garmentResp = await fetch(resolvedGarmentImage, {
         headers: {
