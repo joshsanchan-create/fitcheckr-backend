@@ -140,14 +140,18 @@ app.post("/api/tryon", async (req, res) => {
       body: JSON.stringify({
         model_name: "tryon-v1.6",
         inputs: {
-          model_image:   resolvedModelImage,
-          garment_image: fashnGarmentImage,
+          model_image:        resolvedModelImage,
+          garment_image:      fashnGarmentImage,
           category,
           mode,
-          segmentation_free: true,
+          segmentation_free:  true,
           garment_photo_type: "auto",
-          output_format: "jpeg",
-          return_base64: false, // return CDN URL (more reliable for frontend display)
+          output_format:      "jpeg",
+          return_base64:      false,  // return CDN URL
+          // Anchor the output to the original photo so pose/framing stays
+          // as close as possible to the user's source image.
+          restore_background: true,
+          adjust_hands:       true,   // keeps hand/arm positions natural
         },
       }),
     });
