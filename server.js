@@ -326,6 +326,87 @@ app.get("/api/proxy-image", async (req, res) => {
 });
 
 // ────────────────────────────────────────────────────────
+// POST /api/size-recommendation — AI-powered size recommendation via Claude
+// Body: { product_name, brand, description, sizes[], height, height_unit,
+//         weight, weight_unit, reference }
+// Returns: { size, confidence, reason }
+// ────────────────────────────────────────────────────────
+app.post("/api/size-recommendation", async (req, res) => {
+  if (!ANTHROPIC_API_KEY) {
+    return res.status(500).json({ error: "ANTHROPIC_API_KEY not configured." });
+  }
+
+  const {
+    product_name, brand, description, sizes = [],
+    height, height_unit = "cm",
+    weight, weight_unit = "kg",
+    reference,
+  } = req.body;
+
+  if (!height || !weight) {
+    return res.status(400).json({ error: "height and weight are required." });
+  }
+  if (!sizes.length) {
+    return res.status(400).json({ error: "No sizes available for this product." });
+  }
+
+  const heightCm = height_unit === "ft"
+    ? Math.round(parseFloat(height) * 30.48)
+    : parseFloat(height);
+  const weightKg = weight_unit === "lbs"
+    ? Math.round(parseFloat(weight) * 0.453592)
+    : parseFloat(weight);
+
+  const referenceNote = reference
+    ? `The user says they usually wear ${reference}.`
+    : "No reference garment provided.";
+
+  const prompt = `You are a clothing fit expert. Recommend the best size for this shopper.
+
+Product: ${product_name || "Unknown"}${brand ? ` by ${brand}` : ""}
+${description ? `Description: ${description}\n` : ""}Available sizes: ${sizes.join(", ")}
+
+Shopper stats:
+- Height: ${heightCm} cm
+- Weight: ${weightKg} kg
+- ${referenceNote}
+
+Reply in exactly this format (no other text):
+Size: [one size from the available list, or "Between X and Y" if on the boundary]
+Confidence: [High | Medium | Low]
+Reason: [one clear sentence explaining the recommendation]`;
+
+  try {
+    const { Anthropic } = await import("@anthropic-ai/sdk");
+    const anthropic = new Anthropic({ apiKey: ANTHROPIC_API_KEY });
+
+    const message = await anthropic.messages.create({
+      model:      "claude-haiku-4-5",
+      max_tokens: 120,
+      messages:   [{ role: "user", content: prompt }],
+    });
+
+    const text = message.content[0]?.text || "";
+    const sizeMatch       = text.match(/^Size:\s*(.+)$/m);
+    const confidenceMatch = text.match(/^Confidence:\s*(High|Medium|Low)/im);
+    const reasonMatch     = text.match(/^Reason:\s*(.+)$/m);
+
+    if (!sizeMatch) {
+      return res.status(500).json({ error: "Could not parse recommendation." });
+    }
+
+    return res.json({
+      size:       sizeMatch[1].trim(),
+      confidence: confidenceMatch?.[1] || "Medium",
+      reason:     reasonMatch?.[1]?.trim() || "",
+    });
+  } catch (err) {
+    console.error("size-recommendation error:", err.message);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// ────────────────────────────────────────────────────────
 // POST /api/product-lookup — Look up product info from URL or search query
 // Body: { url } or { query }
 // Returns: { name, brand, price, image_url, color, available_sizes, product_url }
