@@ -211,10 +211,6 @@ app.post("/api/tryon", async (req, res) => {
           garment_photo_type: "auto",
           output_format:      "jpeg",
           return_base64:      false,  // return CDN URL
-          // Anchor the output to the original photo so pose/framing stays
-          // as close as possible to the user's source image.
-          restore_background: true,
-          adjust_hands:       true,   // keeps hand/arm positions natural
         },
       }),
     });
