@@ -378,16 +378,26 @@ Confidence: [High | Medium | Low]
 Reason: [one clear sentence explaining the recommendation]`;
 
   try {
-    const { Anthropic } = await import("@anthropic-ai/sdk");
-    const anthropic = new Anthropic({ apiKey: ANTHROPIC_API_KEY });
-
-    const message = await anthropic.messages.create({
-      model:      "claude-haiku-4-5",
-      max_tokens: 120,
-      messages:   [{ role: "user", content: prompt }],
+    const claudeResp = await fetch(`${ANTHROPIC_BASE}/messages`, {
+      method: "POST",
+      headers: {
+        "x-api-key":         ANTHROPIC_API_KEY,
+        "anthropic-version": "2023-06-01",
+        "content-type":      "application/json",
+      },
+      body: JSON.stringify({
+        model:      "claude-haiku-4-5",
+        max_tokens: 120,
+        messages:   [{ role: "user", content: prompt }],
+      }),
     });
 
-    const text = message.content[0]?.text || "";
+    const claudeData = await claudeResp.json();
+    if (!claudeResp.ok) {
+      throw new Error(claudeData.error?.message || "Claude API error");
+    }
+
+    const text = claudeData.content?.[0]?.text || "";
     const sizeMatch       = text.match(/^Size:\s*(.+)$/m);
     const confidenceMatch = text.match(/^Confidence:\s*(High|Medium|Low)/im);
     const reasonMatch     = text.match(/^Reason:\s*(.+)$/m);
