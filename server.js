@@ -346,9 +346,6 @@ app.post("/api/size-recommendation", async (req, res) => {
   if (!height || !weight) {
     return res.status(400).json({ error: "height and weight are required." });
   }
-  if (!sizes.length) {
-    return res.status(400).json({ error: "No sizes available for this product." });
-  }
 
   const heightCm = height_unit === "ft"
     ? Math.round(parseFloat(height) * 30.48)
@@ -361,10 +358,14 @@ app.post("/api/size-recommendation", async (req, res) => {
     ? `The user says they usually wear ${reference}.`
     : "No reference garment provided.";
 
+  const sizesLine = sizes.length
+    ? `Available sizes: ${sizes.join(", ")}`
+    : "Available sizes: unknown (recommend a standard size like XS/S/M/L/XL based on measurements)";
+
   const prompt = `You are a clothing fit expert. Recommend the best size for this shopper.
 
 Product: ${product_name || "Unknown"}${brand ? ` by ${brand}` : ""}
-${description ? `Description: ${description}\n` : ""}Available sizes: ${sizes.join(", ")}
+${description ? `Description: ${description}\n` : ""}${sizesLine}
 
 Shopper stats:
 - Height: ${heightCm} cm
@@ -372,7 +373,7 @@ Shopper stats:
 - ${referenceNote}
 
 Reply in exactly this format (no other text):
-Size: [one size from the available list, or "Between X and Y" if on the boundary]
+Size: [best size, or "Between X and Y" if borderline]
 Confidence: [High | Medium | Low]
 Reason: [one clear sentence explaining the recommendation]`;
 
