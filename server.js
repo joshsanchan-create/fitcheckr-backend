@@ -2,6 +2,7 @@ require("dotenv").config({ override: true, path: require("path").join(__dirname,
 const express = require("express");
 const cors = require("cors");
 const jwt = require("jsonwebtoken");
+const sharp = require("sharp");
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -182,9 +183,13 @@ app.post("/api/tryon", async (req, res) => {
       });
       if (garmentResp.ok) {
         const garmentBuf = await garmentResp.arrayBuffer();
-        const contentType = garmentResp.headers.get("content-type") || "image/jpeg";
-        fashnGarmentImage = `data:${contentType};base64,${Buffer.from(garmentBuf).toString("base64")}`;
-        console.log("[garment] Converted to base64, size:", garmentBuf.byteLength, "bytes");
+        // Resize to max 1024px so the FASHN payload stays well under 10 MB
+        const resized = await sharp(Buffer.from(garmentBuf))
+          .resize({ width: 1024, height: 1024, fit: "inside", withoutEnlargement: true })
+          .jpeg({ quality: 88 })
+          .toBuffer();
+        fashnGarmentImage = `data:image/jpeg;base64,${resized.toString("base64")}`;
+        console.log("[garment] Resized to", resized.length, "bytes (was", garmentBuf.byteLength, ")");
       } else {
         console.warn("[garment] Fetch failed:", garmentResp.status, "— sending URL directly");
       }
@@ -218,8 +223,11 @@ app.post("/api/tryon", async (req, res) => {
     const fashnData = await fashnResp.json();
 
     if (!fashnResp.ok) {
-      const errMsg = fashnData.detail || fashnData.message || "FASHN API error";
-      console.error("FASHN /run error:", fashnResp.status, errMsg);
+      // Log the full body so Render logs always show the real FASHN reason
+      console.error("FASHN /run error:", fashnResp.status, JSON.stringify(fashnData));
+      const errMsg = fashnData.detail || fashnData.message
+        || (Array.isArray(fashnData) && fashnData[0]?.msg)
+        || JSON.stringify(fashnData);
       return res.status(fashnResp.status).json({ error: errMsg });
     }
 
