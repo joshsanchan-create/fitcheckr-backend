@@ -1,6 +1,7 @@
 require("dotenv").config({ override: true, path: require("path").join(__dirname, ".env") });
 const express = require("express");
 const cors = require("cors");
+const jwt = require("jsonwebtoken");
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -8,6 +9,7 @@ const PORT = process.env.PORT || 3001;
 // ── Config ──
 const FASHN_API_KEY = process.env.FASHN_API_KEY;
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
+const JWT_SECRET = process.env.JWT_SECRET || "dev-secret-change-in-production";
 const FASHN_BASE = "https://api.fashn.ai/v1";
 const ANTHROPIC_BASE = "https://api.anthropic.com/v1";
 
@@ -68,6 +70,67 @@ app.get("/api/health", (_req, res) => {
     fashn_configured: !!FASHN_API_KEY,
     anthropic_configured: !!ANTHROPIC_API_KEY,
   });
+});
+
+// ────────────────────────────────────────────────────────
+// POST /api/auth/google — Exchange a Google OAuth access_token for a
+// FitCheckr session JWT.  The access_token comes from chrome.identity
+// running in the extension and is verified server-side with Google.
+// Returns: { token, user: { id, email, name, picture } }
+// ────────────────────────────────────────────────────────
+app.post("/api/auth/google", async (req, res) => {
+  const { access_token } = req.body || {};
+  if (!access_token) {
+    return res.status(400).json({ error: "access_token is required" });
+  }
+
+  try {
+    // Verify the token by calling Google's userinfo endpoint
+    const googleResp = await fetch(
+      `https://www.googleapis.com/oauth2/v1/userinfo?access_token=${encodeURIComponent(access_token)}`
+    );
+    if (!googleResp.ok) {
+      return res.status(401).json({ error: "Invalid or expired Google token" });
+    }
+    const profile = await googleResp.json();
+    // profile: { id, email, name, picture, verified_email, ... }
+
+    const payload = {
+      sub:     profile.id,
+      email:   profile.email,
+      name:    profile.name,
+      picture: profile.picture,
+    };
+    const token = jwt.sign(payload, JWT_SECRET, { expiresIn: "30d" });
+
+    console.log("[auth] Signed in:", profile.email);
+    return res.json({
+      token,
+      user: { id: profile.id, email: profile.email, name: profile.name, picture: profile.picture },
+    });
+  } catch (err) {
+    console.error("[auth] Google sign-in error:", err.message);
+    return res.status(500).json({ error: "Authentication failed" });
+  }
+});
+
+// ────────────────────────────────────────────────────────
+// GET /api/me — Verify the FitCheckr session JWT and return the
+// current user profile.  Used by the extension on startup.
+// ────────────────────────────────────────────────────────
+app.get("/api/me", (req, res) => {
+  const auth = req.headers.authorization || "";
+  if (!auth.startsWith("Bearer ")) {
+    return res.status(401).json({ error: "No token provided" });
+  }
+  try {
+    const payload = jwt.verify(auth.slice(7), JWT_SECRET);
+    return res.json({
+      user: { id: payload.sub, email: payload.email, name: payload.name, picture: payload.picture },
+    });
+  } catch (_) {
+    return res.status(401).json({ error: "Invalid or expired token" });
+  }
 });
 
 // ────────────────────────────────────────────────────────
